@@ -1,0 +1,13 @@
+# Target labels
+ bootloader
+# Source files and their labels
+/Users/tolgakuntman/Documents/PlatformIO/Projects/esp32_ee3/build/CMakeFiles/bootloader
+/Users/tolgakuntman/Documents/PlatformIO/Projects/esp32_ee3/build/CMakeFiles/bootloader.rule
+/Users/tolgakuntman/Documents/PlatformIO/Projects/esp32_ee3/build/CMakeFiles/bootloader-complete.rule
+/Users/tolgakuntman/Documents/PlatformIO/Projects/esp32_ee3/build/bootloader-prefix/src/bootloader-stamp/bootloader-build.rule
+/Users/tolgakuntman/Documents/PlatformIO/Projects/esp32_ee3/build/bootloader-prefix/src/bootloader-stamp/bootloader-configure.rule
+/Users/tolgakuntman/Documents/PlatformIO/Projects/esp32_ee3/build/bootloader-prefix/src/bootloader-stamp/bootloader-download.rule
+/Users/tolgakuntman/Documents/PlatformIO/Projects/esp32_ee3/build/bootloader-prefix/src/bootloader-stamp/bootloader-install.rule
+/Users/tolgakuntman/Documents/PlatformIO/Projects/esp32_ee3/build/bootloader-prefix/src/bootloader-stamp/bootloader-mkdir.rule
+/Users/tolgakuntman/Documents/PlatformIO/Projects/esp32_ee3/build/bootloader-prefix/src/bootloader-stamp/bootloader-patch.rule
+/Users/tolgakuntman/Documents/PlatformIO/Projects/esp32_ee3/build/bootloader-prefix/src/bootloader-stamp/bootloader-update.rule
