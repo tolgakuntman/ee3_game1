@@ -36,9 +36,9 @@
 #define CONFIG_CE_GPIO GPIO_NUM_9
 #define CONFIG_CSN_GPIO GPIO_NUM_10
 
-static const int SPI_Frequency = 4000000; // Stable even with a long jumper cable
+// static const int SPI_Frequency = 4000000; // Stable even with a long jumper cable
 //static const int SPI_Frequency = 6000000;
-//static const int SPI_Frequency = 8000000; // Requires a short jumper cable
+static const int SPI_Frequency = 8000000; // Requires a short jumper cable
 //static const int SPI_Frequency = 10000000; // Unstable even with a short jumper cable
 
 char rf24_datarates[][8] = {"1Mbps", "2Mbps", "250Kbps"};
@@ -356,7 +356,7 @@ bool Nrf24_isSend(NRF24_t * dev, int timeout) {
 			/*
 				if sending successful (TX_DS) or max retries exceded (MAX_RT).
 			*/
-			printf("%d\n",status);
+			// printf("%d\n",status);
 			if (status & (1 << TX_DS)) { // Data Sent TX FIFO interrup
 				Nrf24_powerUpRx(dev);
 				return true;

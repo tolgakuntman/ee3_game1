@@ -1,7 +1,7 @@
 {
     "version":            "1.1",
     "project_name":       "esp32_ee3",
-    "project_version":    "1",
+    "project_version":    "6e0c472-dirty",
     "project_path":       "/Users/tolgakuntman/Documents/PlatformIO/Projects/esp32_ee3",
     "idf_path":           "/Users/tolgakuntman/esp/esp-idf",
     "build_dir":          "/Users/tolgakuntman/Documents/PlatformIO/Projects/esp32_ee3/build",
