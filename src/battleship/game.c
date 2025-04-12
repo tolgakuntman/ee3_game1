@@ -10,11 +10,13 @@
 #include "esp_log.h"
 #include "nrf_io.h"
 
+static Game *current_game;
+
 static void Game_Init(Game *game) {
     memset(game, 0, sizeof(Game));
 
     game->difficulty = DIFFICULTY_HARD;
-
+    current_game=game;
     init_board(&game->player.board);
     init_board(&game->opponent.board);
     engine_init();
@@ -24,10 +26,14 @@ static void Game_Init(Game *game) {
     led_matrix_init();
     vTaskDelay(1000 / portTICK_PERIOD_MS);
 }
+
+Game *get_game_instance(void) {
+    return current_game;
+}
 void setup_game_randomly(Game *game) {
     place_random_ships(&game->player, ship_lengths, MAX_SHIPS);
     place_random_ships(&game->opponent, ship_lengths, MAX_SHIPS);
-    render_board_to_matrix(&game->player.board, 0, true);
+    render_board_to_matrix(&game->player.board, PLAYER_MATRIX, true);
     send_led_matrix_update(3);
     print_board(&game->player.board, true);
     print_board(&game->opponent.board, true);
@@ -77,19 +83,22 @@ void game_task(void *pvParameters) {
         switch (game->state) {
             case GAME_STATE_INIT:
                 Game_Init(game);    
-                game->state = GAME_STATE_RANDOM_INIT;            
+                game->state = GAME_STATE_WEB_INIT;            
                 break;
 
             case GAME_STATE_WEB_INIT:
-                // if (http_data_ready()) {
-                //     setup_game_from_http(game); // copy difficulty + ship grid
-                //     game->state = GAME_STATE_RUNNING;
-                // }
+                if(current_game->ships_ready){
+                    game->state = GAME_STATE_WAITING_FOR_PLAYER;
+                    render_board_to_matrix(&game->player.board, PLAYER_MATRIX, true);
+                    place_random_ships(&game->opponent, ship_lengths, MAX_SHIPS);
+                    print_board(&game->opponent.board, true);
+                    print_board(&game->player.board, true);
+                }
                 break;
 
             case GAME_STATE_RANDOM_INIT:
                 setup_game_randomly(game);
-                game->state = GAME_STATE_WAITING_FOR_OPPONENT;
+                game->state = GAME_STATE_WAITING_FOR_PLAYER;
                 break;
 
                 case GAME_STATE_WAITING_FOR_PLAYER: {
@@ -111,8 +120,8 @@ void game_task(void *pvParameters) {
  
                                 ESP_LOGI(GAME_TAG,"Miss at (%d, %d)", coord.row, coord.col);
                             }
-                            render_board_to_matrix(&game->player.board, 0, true);
-                            render_board_to_matrix(&game->opponent.board, 1, false);
+                            render_board_to_matrix(&game->player.board, PLAYER_MATRIX, true);
+                            render_board_to_matrix(&game->opponent.board, OPPONENT_MATRIX, false);
                             print_board(&game->opponent.board, true);
                             print_board(&game->player.board, true);
                             if (all_ships_sunk(&game->opponent)) {
@@ -142,8 +151,8 @@ void game_task(void *pvParameters) {
 
                     ESP_LOGI(GAME_TAG,"Miss at (%d, %d)", coord.row, coord.col);
                 }
-                render_board_to_matrix(&game->player.board, 0, true);
-                render_board_to_matrix(&game->opponent.board, 1, false);
+                render_board_to_matrix(&game->player.board, PLAYER_MATRIX, true);
+                render_board_to_matrix(&game->opponent.board, OPPONENT_MATRIX, false);
                 print_board(&game->opponent.board, true);
                 print_board(&game->player.board, true);
                 if (all_ships_sunk(&game->player)) {
@@ -151,7 +160,7 @@ void game_task(void *pvParameters) {
                     ESP_LOGI(GAME_TAG, "All ships sunk! Game Over.");
                     send_led_matrix_update(3);
                 } else {
-                    game->state = GAME_STATE_WAITING_FOR_OPPONENT;
+                    game->state = GAME_STATE_WAITING_FOR_PLAYER;
                 }
                 break;
 
@@ -162,14 +171,15 @@ void game_task(void *pvParameters) {
             case GAME_STATE_GAME_OVER:
                 // send_game_over_update(); // to GUI, LEDs, etc.
                 vTaskDelay(pdMS_TO_TICKS(5000)); // brief pause
-                game->state = GAME_STATE_GAME_OVER;
+                game->state = GAME_STATE_GAME_RESTART;
                 break;
 
             case GAME_STATE_GAME_RESTART:
-                // Game_Restart(game);
+                engine_restart();
+                game->state = GAME_STATE_INIT;
                 break;
         }
         send_led_matrix_update(3);
-        vTaskDelay(pdMS_TO_TICKS(50)); // reduce CPU load
+        vTaskDelay(pdMS_TO_TICKS(100)); // reduce CPU load
     }
 }

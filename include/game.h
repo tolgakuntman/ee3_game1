@@ -67,7 +67,9 @@ typedef struct {
     Player opponent;
     difficulty_level_t difficulty;
     game_state_t state;
+    bool ships_ready;
 }Game;
+Game *get_game_instance(void);
 void game_task(void *pvParameters);
 void render_board_to_matrix(const Board *board, uint8_t matrix_num, bool reveal_ships);
 

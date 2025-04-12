@@ -11,11 +11,12 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include "game.h"
+#include "game_logic.h"
 
 static const char *TAG_WIFI = "WiFiStation";
 static const char *TAG_HTTP = "HTTP_Server";
 
-static game_setup_t current_setup;
 
 static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
@@ -106,26 +107,26 @@ static esp_err_t post_set_difficulty_handler(httpd_req_t *req) {
         cJSON_Delete(json);
         return ESP_FAIL;
     }
-
-    current_setup.difficulty = (difficulty_level_t)level->valueint;
-    ESP_LOGI(TAG_HTTP, "Difficulty set to %d", current_setup.difficulty);
+    Game *game = get_game_instance();
+    game->difficulty = (difficulty_level_t)level->valueint;
+    ESP_LOGI(TAG_HTTP, "Difficulty set to %d", game->difficulty);
 
     cJSON_Delete(json);
     httpd_resp_sendstr(req, "OK");
     return ESP_OK;
 }
-static void print_ship_grid(void) {
-    ESP_LOGI(TAG_HTTP, "Current Ship Grid:");
-    for (int i = 0; i < GRID_SIZE; i++) {
-        char row[GRID_SIZE * 4] = {0}; 
-        for (int j = 0; j < GRID_SIZE; j++) {
-            char cell[GRID_SIZE+1]; //+1 to avoid compiler error
-            snprintf(cell, sizeof(cell), "%d ", current_setup.ship_grid[i][j]);
-            strcat(row, cell);
-        }
-        ESP_LOGI(TAG_HTTP, "%s", row); 
-    }
-}
+// static void print_ship_grid(void) {
+//     ESP_LOGI(TAG_HTTP, "Current Ship Grid:");
+//     for (int i = 0; i < GRID_SIZE; i++) {
+//         char row[GRID_SIZE * 4] = {0}; 
+//         for (int j = 0; j < GRID_SIZE; j++) {
+//             char cell[GRID_SIZE+1]; //+1 to avoid compiler error
+//             snprintf(cell, sizeof(cell), "%d ", current_setup.ship_grid[i][j]);
+//             strcat(row, cell);
+//         }
+//         ESP_LOGI(TAG_HTTP, "%s", row); 
+//     }
+// }
 static esp_err_t post_place_ships_handler(httpd_req_t *req) {
     char buf[512];
     int ret = httpd_req_recv(req, buf, sizeof(buf));
@@ -135,27 +136,43 @@ static esp_err_t post_place_ships_handler(httpd_req_t *req) {
     cJSON *json = cJSON_Parse(buf);
     if (!json) return ESP_FAIL;
 
-    cJSON *grid = cJSON_GetObjectItem(json, "ship_grid");
-    if (!grid || !cJSON_IsArray(grid)) {
+    cJSON *ships = cJSON_GetObjectItem(json, "ships");
+    if (!ships || !cJSON_IsArray(ships)) {
         cJSON_Delete(json);
         return ESP_FAIL;
     }
+    Game *game = get_game_instance();
+    Player *player = &game->player;
+    player->boat_count = 0;
 
-    for (int i = 0; i < GRID_SIZE; i++) {
-        cJSON *row = cJSON_GetArrayItem(grid, i);
-        if (!row || !cJSON_IsArray(row)) continue;
-        for (int j = 0; j < GRID_SIZE; j++) {
-            cJSON *cell = cJSON_GetArrayItem(row, j);
-            current_setup.ship_grid[i][j] = (cell && cJSON_IsNumber(cell)) ? (uint8_t)cell->valueint : 0;
+    for (int i = 0; i < cJSON_GetArraySize(ships); ++i) {
+        cJSON *ship = cJSON_GetArrayItem(ships, i);
+        if (!ship) continue;
+        int row = cJSON_GetObjectItem(ship, "row")->valueint;
+        int col = cJSON_GetObjectItem(ship, "col")->valueint;
+        int len = cJSON_GetObjectItem(ship, "length")->valueint;
+        bool horizontal = cJSON_GetObjectItem(ship, "horizontal")->valueint;
+        ESP_LOGI(TAG_HTTP, "Placing ship at (%d, %d) length %d %s", row, col, len, horizontal ? "horizontal" : "vertical");
+        if (player->boat_count >= MAX_SHIPS) break;
+        if (!can_place_ship(&player->board, row, col, len, horizontal)){
+            ESP_LOGE(TAG_HTTP, "Invalid ship placement at (%d, %d)", row, col);
+            cJSON_Delete(json);
+            return ESP_FAIL;
         }
+
+        Boat *b = &player->boats[player->boat_count];
+        place_ship(&player->board, b, row, col, len, horizontal);
+        player->boat_count++;
     }
 
-    ESP_LOGI(TAG_HTTP, "Ship grid set");
+    ESP_LOGI(TAG_HTTP, "Ships placed via API.");
+    // print_ship_grid();  // Show updated grid
     cJSON_Delete(json);
     httpd_resp_sendstr(req, "OK");
-    print_ship_grid();
+    game->ships_ready = true;
     return ESP_OK;
 }
+
 
 
 

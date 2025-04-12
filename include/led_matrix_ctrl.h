@@ -6,7 +6,7 @@
 
 #define MATRIX_SIZE 5
 
-#define PLAYER_MATRIX 0
+#define PLAYER_MATRIX 2
 #define OPPONENT_MATRIX 1
 
 typedef enum {

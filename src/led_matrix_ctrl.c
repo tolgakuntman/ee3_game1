@@ -35,8 +35,8 @@ void setLEDColor(uint8_t matrixNum, uint8_t row, uint8_t col, Color color) {
     if (matrixNum == 1) {
         // Same as PIC: R=0, G=1, B=2
         bit0 = col * 3;
-        bit1 = col * 3 + 1;
-        bit2 = col * 3 + 2;
+        bit1 = col * 3 + 2;
+        bit2 = col * 3 + 1;
     } else {
         // Matrix 2 on PIC: R=0, B=1, G=2
         bit0 = col * 3;
