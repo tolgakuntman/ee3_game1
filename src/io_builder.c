@@ -45,6 +45,6 @@ bool send_led_matrix_update(uint8_t slave_id) {
     msg.payload_length = MATRIX_SIZE * 2 * 2; // 2 matrices * 5 rows * 2 bytes = 20
     msg.slave_id = slave_id;
 
-    ESP_LOGI("IO_SEND", "Sending LED matrix update to slave %d", slave_id);
+    // ESP_LOGI("IO_SEND", "Sending LED matrix update to slave %d", slave_id);
     return io_enqueue_send(&msg);
 }

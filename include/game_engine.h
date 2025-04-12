@@ -12,7 +12,11 @@ typedef struct {
     bool hunting;
 } ai_state_t;
 
-
+void engine_init(void);
+void engine_restart(void);
+void engine_get_guess(difficulty_level_t difficulty, Board *ai_board, int *row, int *col);
+void engine_update_smart_ai(int row, int col, char result);
+Board* engine_get_ai_board(void);
 void ai_guess_random(const Board *guessBoard, int *row, int *col);
 void ai_reset_smart(ai_state_t *state);
 void ai_guess_smart(const Board *guessBoard, ai_state_t *state, int *row, int *col);

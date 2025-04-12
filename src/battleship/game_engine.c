@@ -4,14 +4,73 @@
 #include <string.h>
 #include <stdbool.h>
 #include "game_logic.h"
+#include <esp_random.h>
+
+
+#include "game_engine.h"
+#include <string.h>
+#include <esp_random.h>
+#include <stdio.h>
+
+static ai_state_t smart_ai_state;
+static Board ai_guess_board;
+
+void engine_init(void) {
+    ai_reset_smart(&smart_ai_state);
+    init_board(&ai_guess_board);
+}
+
+void engine_restart(void) {
+    ai_reset_smart(&smart_ai_state);
+    init_board(&ai_guess_board);
+}
+
+void engine_update_smart_ai(int row, int col, char result) {
+    ai_update_smart(&smart_ai_state, row, col, result);
+    if (result == 'H' || result == 'S') {
+        ai_guess_board.cells[row][col] = CELL_HIT;
+    } else if (result == 'M') {
+        ai_guess_board.cells[row][col] = CELL_MISS;
+    }
+}
+
+Board* engine_get_ai_board(void) {
+    return &ai_guess_board;
+}
+
+void engine_get_guess(difficulty_level_t difficulty, Board *ai_board, int *row, int *col) {
+    switch (difficulty) {
+        case DIFFICULTY_RANDOM:
+            ai_guess_random(ai_board, row, col);
+            break;
+
+        case DIFFICULTY_SMART:
+            ai_guess_smart(ai_board, &smart_ai_state, row, col);
+            break;
+
+        case DIFFICULTY_HARD: {
+            const int ship_lengths[] = {3, 2, 2};
+            uint8_t heatmap[GRID_SIZE][GRID_SIZE];
+            generate_heatmap(ai_board->cells, ship_lengths, 3, heatmap);
+            Coordinate best = select_best_move(heatmap, ai_board->cells);
+            *row = best.row;
+            *col = best.col;
+            break;
+        }
+
+        default:
+            ai_guess_random(ai_board, row, col);
+            break;
+    }
+}
 
 void ai_guess_random(const Board *guessBoard, int *row, int *col) {
-    // Generate random coordinates until an empty cell is found
     do {
-        *row = rand() % GRID_SIZE;
-        *col = rand() % GRID_SIZE;
+        *row = esp_random() % GRID_SIZE;
+        *col = esp_random() % GRID_SIZE;
     } while (guessBoard->cells[*row][*col] != CELL_EMPTY);
 }
+
 
 
 

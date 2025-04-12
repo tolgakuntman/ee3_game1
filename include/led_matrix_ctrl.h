@@ -6,11 +6,15 @@
 
 #define MATRIX_SIZE 5
 
+#define PLAYER_MATRIX 0
+#define OPPONENT_MATRIX 1
+
 typedef enum {
     COLOR_OFF = 0,
     COLOR_RED,
     COLOR_GREEN,
-    COLOR_BLUE
+    COLOR_BLUE,
+    COLOR_CYAN
 } Color;
 
 void led_matrix_init(void);

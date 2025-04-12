@@ -14,6 +14,7 @@
 #include "http_server.h"
 #include "game_logic.h"
 #include "game_engine.h"
+#include "game.h"
 static const char *TAG = "http_server_thread";
 
 // Task function to run the HTTP server
@@ -44,20 +45,28 @@ void app_main() {
     io_thread_init();
     hb_init();
     led_matrix_init();
+    Game *game=malloc(sizeof(Game));
+    game->state = GAME_STATE_INIT;
+    if (game == NULL) {
+        ESP_LOGE(TAG, "Failed to allocate memory for game structure");
+        return;
+    }
+    srand(time(NULL)); // Seed the random number generator
     xTaskCreate(http_server_task, "http_server_task", 4096, NULL, 5, NULL);
+    xTaskCreate(game_task, "game_task", 4096*2, game, 5, NULL);
     while(1){
         
         // send_robot_command(3,1,0,0,0,0);
-        // vTaskDelay(10 / portTICK_PERIOD_MS);
+        vTaskDelay(10 / portTICK_PERIOD_MS);
         // send_robot_command(2,1,0,0,0,1);
         // setLEDColor(1, 0, 0, COLOR_RED);
         // vTaskDelay(50 / portTICK_PERIOD_MS);
-        setLEDColor(2, 0, 0, COLOR_RED);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        // setLEDColor(2, 0, 0, COLOR_RED);
+        // vTaskDelay(1000 / portTICK_PERIOD_MS);
 
-        // setLEDColor(1, 0, 0, COLOR_GREEN);
-        // vTaskDelay(50 / portTICK_PERIOD_MS);
-        setLEDColor(2, 0, 0, COLOR_GREEN);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        // // setLEDColor(1, 0, 0, COLOR_GREEN);
+        // // vTaskDelay(50 / portTICK_PERIOD_MS);
+        // setLEDColor(2, 0, 0, COLOR_GREEN);
+        // vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
 }

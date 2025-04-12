@@ -1,22 +1,24 @@
 #include "game_logic.h"
 #include <stdlib.h>
 #include <time.h>
-#include <stdio.h>
 #include <string.h>
+#include "esp_log.h"
+#include <stdio.h>
+#include <esp_random.h>
+
+static const char *TAG = "game_logic";
 
 void init_board(Board *b) {
     memset(b->cells, CELL_EMPTY, sizeof(b->cells));
 }
 
 void print_board(const Board *b, bool reveal) {
-    printf("   ");
-    for (int c = 0; c < GRID_SIZE; c++) {
-        printf(" %d", c);
-    }
-    printf("\n");
+    char buffer[64];  // Enough for 5x5 grid and formatting
+    ESP_LOGI(TAG, "   0 1 2 3 4"); // Fixed header for GRID_SIZE = 5
+
     for (int r = 0; r < GRID_SIZE; r++) {
-        printf("%2d ", r);
-        for (int c = 0; c < GRID_SIZE; c++) {
+        int offset = snprintf(buffer, sizeof(buffer), "%2d", r);
+        for (int c = 0; c < GRID_SIZE && offset < sizeof(buffer) - 2; c++) {
             char ch;
             switch (b->cells[r][c]) {
                 case CELL_EMPTY: ch = '.'; break;
@@ -26,11 +28,12 @@ void print_board(const Board *b, bool reveal) {
                 case CELL_SUNK:  ch = 'X'; break;
                 default:         ch = '?'; break;
             }
-            printf(" %c", ch);
+            offset += snprintf(buffer + offset, sizeof(buffer) - offset, " %c", ch);
         }
-        printf("\n");
+        ESP_LOGI(TAG, "%s", buffer);
     }
 }
+
 
 bool can_place_ship(const Board *b, int row, int col, int length, bool horizontal) {
     if (horizontal) {
@@ -57,6 +60,7 @@ void place_ship(Board *b, Boat *boat, int row, int col, int length, bool horizon
         boat->coords[i].row = r;
         boat->coords[i].col = c;
     }
+    ESP_LOGI(TAG, "Placed ship at (%d, %d) with length %d %s", row, col, length, horizontal ? "horizontally" : "vertically");
 }
 
 char apply_guess(Player *target, int row, int col) {
@@ -74,23 +78,28 @@ char apply_guess(Player *target, int row, int col) {
                             int c = boat->coords[j].col;
                             target->board.cells[r][c] = CELL_SUNK;
                         }
+                        ESP_LOGI(TAG, "Ship sunk at (%d, %d)", row, col);
                         return 'S';
                     }
+                    ESP_LOGI(TAG, "Hit at (%d, %d)", row, col);
                     return 'H';
                 }
             }
         }
     } else if (*cell == CELL_EMPTY) {
         *cell = CELL_MISS;
+        ESP_LOGI(TAG, "Miss at (%d, %d)", row, col);
         return 'M';
     }
-    return ' '; // already guessed
+    ESP_LOGI(TAG, "Already guessed at (%d, %d)", row, col);
+    return 0; // already guessed
 }
 
 bool all_ships_sunk(const Player *p) {
     for (int b = 0; b < p->boat_count; b++) {
         if (p->boats[b].hit_count < p->boats[b].length) return false;
     }
+    ESP_LOGI(TAG, "All ships sunk!");
     return true;
 }
 
@@ -100,9 +109,9 @@ void place_random_ships(Player *p, const int lengths[], int count) {
     for (int i = 0; i < count; i++) {
         int attempts = 0;
         while (attempts++ < 100) {
-            int row = rand() % GRID_SIZE;
-            int col = rand() % GRID_SIZE;
-            bool horizontal = rand() % 2;
+            int row = esp_random() % GRID_SIZE;
+            int col = esp_random() % GRID_SIZE;
+            bool horizontal = esp_random() % 2;
             if (can_place_ship(&p->board, row, col, lengths[i], horizontal)) {
                 place_ship(&p->board, &p->boats[p->boat_count], row, col, lengths[i], horizontal);
                 p->boat_count++;
@@ -110,7 +119,10 @@ void place_random_ships(Player *p, const int lengths[], int count) {
             }
         }
     }
+    ESP_LOGI(TAG, "Random ships placed");
 }
+
 void reset_board(Board *b) {
     memset(b->cells, CELL_EMPTY, sizeof(b->cells));
+    ESP_LOGI(TAG, "Board reset");
 }

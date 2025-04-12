@@ -25,6 +25,7 @@ void led_matrix_init(void) {
     send_led_matrix_update(3); // Send update to slave 3
 }
 
+
 void setLEDColor(uint8_t matrixNum, uint8_t row, uint8_t col, Color color) {
     if (row >= MATRIX_SIZE || col >= MATRIX_SIZE) return;
 
@@ -59,11 +60,16 @@ void setLEDColor(uint8_t matrixNum, uint8_t row, uint8_t col, Color color) {
             matrix[row] |=  (1 << bit1); // off green
             matrix[row] &= ~(1 << bit2); // on blue
             break;
+        case COLOR_CYAN:
+            matrix[row] &= ~(1 << bit1); // on green
+            matrix[row] &= ~(1 << bit2); // on blue
+            matrix[row] |=  (1 << bit0); // off red
+            break;
         default: // COLOR_OFF
             matrix[row] |= (1 << bit0) | (1 << bit1) | (1 << bit2);
             break;
     }
-    send_led_matrix_update(3); // Send update to slave 3
+    // send_led_matrix_update(3); // Send update to slave 3
 }
 void setLEDColorAll(uint8_t matrixNum, Color color) {
     for (uint8_t row = 0; row < MATRIX_SIZE; row++) {

@@ -1,8 +1,10 @@
 {
     "idf.port": "/dev/tty.usbserial-1130",
     "files.associations": {
+        "*.embeddedhtml": "html",
         "task.h": "c",
         "esp_log.h": "c",
-        "mirf.h": "c"
+        "mirf.h": "c",
+        "led_matrix_ctrl.h": "c"
     }
 }
