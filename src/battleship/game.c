@@ -9,6 +9,7 @@
 #include <string.h>
 #include "esp_log.h"
 #include "nrf_io.h"
+#include "http_server.h"
 
 static Game *current_game;
 
@@ -17,6 +18,7 @@ static void Game_Init(Game *game) {
 
     game->difficulty = DIFFICULTY_HARD;
     current_game=game;
+    game->turn= 0;            
     init_board(&game->player.board);
     init_board(&game->opponent.board);
     engine_init();
@@ -34,7 +36,6 @@ void setup_game_randomly(Game *game) {
     place_random_ships(&game->player, ship_lengths, MAX_SHIPS);
     place_random_ships(&game->opponent, ship_lengths, MAX_SHIPS);
     render_board_to_matrix(&game->player.board, PLAYER_MATRIX, true);
-    send_led_matrix_update(3);
     print_board(&game->player.board, true);
     print_board(&game->opponent.board, true);
     vTaskDelay(1000 / portTICK_PERIOD_MS);
@@ -83,22 +84,24 @@ void game_task(void *pvParameters) {
         switch (game->state) {
             case GAME_STATE_INIT:
                 Game_Init(game);    
-                game->state = GAME_STATE_WEB_INIT;            
+                game->state = GAME_STATE_WEB_INIT;
                 break;
 
             case GAME_STATE_WEB_INIT:
-                if(current_game->ships_ready){
+                if(current_game->game_ready){
                     game->state = GAME_STATE_WAITING_FOR_PLAYER;
                     render_board_to_matrix(&game->player.board, PLAYER_MATRIX, true);
                     place_random_ships(&game->opponent, ship_lengths, MAX_SHIPS);
-                    print_board(&game->opponent.board, true);
                     print_board(&game->player.board, true);
+                    print_board(&game->opponent.board, true);
+                    // send_ws_game_update(game, false);
                 }
                 break;
 
             case GAME_STATE_RANDOM_INIT:
                 setup_game_randomly(game);
                 game->state = GAME_STATE_WAITING_FOR_PLAYER;
+                // send_ws_game_update(game, false);
                 break;
 
                 case GAME_STATE_WAITING_FOR_PLAYER: {
@@ -124,11 +127,14 @@ void game_task(void *pvParameters) {
                             render_board_to_matrix(&game->opponent.board, OPPONENT_MATRIX, false);
                             print_board(&game->opponent.board, true);
                             print_board(&game->player.board, true);
+                            game->turn = 1;
                             if (all_ships_sunk(&game->opponent)) {
                                 game->state = GAME_STATE_GAME_OVER;
                                 ESP_LOGI(GAME_TAG, "All ships sunk! Game Over.");
+                                send_ws_result("player");
                             } else {
                                 game->state = GAME_STATE_WAITING_FOR_OPPONENT;
+                                send_ws_game_update(game, false);
                             }
                         }
                     }
@@ -155,12 +161,15 @@ void game_task(void *pvParameters) {
                 render_board_to_matrix(&game->opponent.board, OPPONENT_MATRIX, false);
                 print_board(&game->opponent.board, true);
                 print_board(&game->player.board, true);
+                game->turn = 0;
                 if (all_ships_sunk(&game->player)) {
                     game->state = GAME_STATE_GAME_OVER;
                     ESP_LOGI(GAME_TAG, "All ships sunk! Game Over.");
                     send_led_matrix_update(3);
+                    send_ws_result("opponent");
                 } else {
                     game->state = GAME_STATE_WAITING_FOR_PLAYER;
+                    send_ws_game_update(game, false);
                 }
                 break;
 
@@ -170,8 +179,8 @@ void game_task(void *pvParameters) {
 
             case GAME_STATE_GAME_OVER:
                 // send_game_over_update(); // to GUI, LEDs, etc.
-                vTaskDelay(pdMS_TO_TICKS(5000)); // brief pause
-                game->state = GAME_STATE_GAME_RESTART;
+                vTaskDelay(pdMS_TO_TICKS(500)); // brief pause
+                // game->state = GAME_STATE_GAME_RESTART;
                 break;
 
             case GAME_STATE_GAME_RESTART:

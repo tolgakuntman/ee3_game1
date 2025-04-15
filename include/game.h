@@ -67,7 +67,8 @@ typedef struct {
     Player opponent;
     difficulty_level_t difficulty;
     game_state_t state;
-    bool ships_ready;
+    bool game_ready;
+    bool turn; // 0 for player, 1 for opponent
 }Game;
 Game *get_game_instance(void);
 void game_task(void *pvParameters);

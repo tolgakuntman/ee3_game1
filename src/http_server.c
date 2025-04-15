@@ -17,6 +17,9 @@
 static const char *TAG_WIFI = "WiFiStation";
 static const char *TAG_HTTP = "HTTP_Server";
 
+static httpd_handle_t active_ws_handle = NULL;
+static int active_ws_fd = -1;
+
 
 static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
@@ -115,18 +118,7 @@ static esp_err_t post_set_difficulty_handler(httpd_req_t *req) {
     httpd_resp_sendstr(req, "OK");
     return ESP_OK;
 }
-// static void print_ship_grid(void) {
-//     ESP_LOGI(TAG_HTTP, "Current Ship Grid:");
-//     for (int i = 0; i < GRID_SIZE; i++) {
-//         char row[GRID_SIZE * 4] = {0}; 
-//         for (int j = 0; j < GRID_SIZE; j++) {
-//             char cell[GRID_SIZE+1]; //+1 to avoid compiler error
-//             snprintf(cell, sizeof(cell), "%d ", current_setup.ship_grid[i][j]);
-//             strcat(row, cell);
-//         }
-//         ESP_LOGI(TAG_HTTP, "%s", row); 
-//     }
-// }
+
 static esp_err_t post_place_ships_handler(httpd_req_t *req) {
     char buf[512];
     int ret = httpd_req_recv(req, buf, sizeof(buf));
@@ -169,21 +161,85 @@ static esp_err_t post_place_ships_handler(httpd_req_t *req) {
     // print_ship_grid();  // Show updated grid
     cJSON_Delete(json);
     httpd_resp_sendstr(req, "OK");
-    game->ships_ready = true;
+    game->game_ready = true;
     return ESP_OK;
 }
 
+static esp_err_t post_setup_game_handler(httpd_req_t *req) {
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
 
+    char buf[512];
+    buf[511] = '\0';
+    int ret = httpd_req_recv(req, buf, sizeof(buf));
+    ESP_LOGI(TAG_HTTP, "Received setup game request: %s", buf);
+    if (ret <= 0) return ESP_FAIL;
 
+    cJSON *json = cJSON_Parse(buf);
+    if (!json) return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
+
+    cJSON *level = cJSON_GetObjectItem(json, "difficulty");
+    cJSON *ships = cJSON_GetObjectItem(json, "ships");
+    cJSON *random = cJSON_GetObjectItem(json, "random");
+    if (!level || !cJSON_IsNumber(level) || !ships || !cJSON_IsArray(ships)|| !random || !cJSON_IsBool(random)) {
+        cJSON_Delete(json);
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing fields");
+    }
+
+    Game *game = get_game_instance();
+    game->difficulty = (difficulty_level_t)level->valueint;
+    bool is_random = cJSON_IsTrue(random);
+    if(is_random) {
+        game->state = GAME_STATE_RANDOM_INIT;
+        ESP_LOGI(TAG_HTTP, "Random game setup requested");
+        ESP_LOGI(TAG_HTTP, "Setup game completed: difficulty=%d and randomized", game->difficulty);
+        cJSON_Delete(json);
+        return httpd_resp_send(req, "OK", HTTPD_RESP_USE_STRLEN);
+    }
+    Player *player = &game->player;
+    // reset_board(&player->board);  // enable if needed
+    player->boat_count = 0;
+
+    for (int i = 0; i < cJSON_GetArraySize(ships); ++i) {
+        cJSON *ship = cJSON_GetArrayItem(ships, i);
+        if (!ship) continue;
+
+        int row = cJSON_GetObjectItem(ship, "row")->valueint;
+        int len = cJSON_GetObjectItem(ship, "length")->valueint;
+        int col = cJSON_GetObjectItem(ship, "col")->valueint;
+        bool horizontal = cJSON_GetObjectItem(ship, "horizontal")->valueint;
+
+        ESP_LOGI(TAG_HTTP, "Placing ship at (%d, %d) length %d %s", row, col, len, horizontal ? "horizontal" : "vertical");
+
+        if (player->boat_count >= MAX_SHIPS) break;
+        if (!can_place_ship(&player->board, row, col, len, horizontal)) {
+            ESP_LOGE(TAG_HTTP, "Invalid ship placement at (%d, %d)", row, col);
+            cJSON_Delete(json);
+            return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid placement");
+        }
+
+        Boat *b = &player->boats[player->boat_count];
+        place_ship(&player->board, b, row, col, len, horizontal);
+        player->boat_count++;
+    }
+
+    ESP_LOGI(TAG_HTTP, "Setup game completed: difficulty=%d, ships=%d", game->difficulty, player->boat_count);
+    cJSON_Delete(json);
+    game->game_ready = true;
+    return httpd_resp_send(req, "OK", HTTPD_RESP_USE_STRLEN);
+}
+
+static esp_err_t cors_options_handler(httpd_req_t *req) {
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type");
+    return httpd_resp_send(req, NULL, 0);
+}
 
 static esp_err_t websocket_handler(httpd_req_t *req) {
     if (req->method == HTTP_GET) {
-        struct sockaddr_in6 addr;
-        socklen_t len = sizeof(addr);
-        getpeername(httpd_req_to_sockfd(req), (struct sockaddr *)&addr, &len);
-        char ip[INET6_ADDRSTRLEN];
-        inet_ntop(AF_INET, &addr.sin6_addr, ip, sizeof(ip));
-        ESP_LOGI(TAG_HTTP, "WebSocket client connected: %s", ip);
+        active_ws_handle = req->handle;
+        active_ws_fd = httpd_req_to_sockfd(req);
+        ESP_LOGI(TAG_HTTP, "WebSocket client connected.");
         return ESP_OK;
     }
 
@@ -199,17 +255,97 @@ static esp_err_t websocket_handler(httpd_req_t *req) {
     if (ret == ESP_OK) {
         ESP_LOGI(TAG_HTTP, "WebSocket message: %s", buf);
 
-        if (ws_pkt.type == HTTPD_WS_TYPE_TEXT &&
-            strcmp((char *)buf, "Trigger async") == 0) {
-            free(buf);
-            return trigger_async_send(req->handle, req);
+        if (ws_pkt.type == HTTPD_WS_TYPE_TEXT) {
+            if (strcmp((char *)buf, "init") == 0) {
+                Game *game = get_game_instance();
+                send_ws_game_update(game, true); // ✅ Only send when browser says it's ready
+            }else if (strcmp((char *)buf, "restart") == 0) {
+                Game *game = get_game_instance();
+                game->state = GAME_STATE_GAME_RESTART;
+                ESP_LOGI(TAG_HTTP, "Game restart requested");
+                return ESP_OK;
+            } else {
+                ESP_LOGI(TAG_HTTP, "Unknown WebSocket message: %s", buf);
+            }
         }
-
-        httpd_ws_send_frame(req, &ws_pkt);
     }
+
 
     free(buf);
     return ret;
+}
+
+static cJSON *board_to_json(const Board *b, bool revealShips) {
+    cJSON *boardArr = cJSON_CreateArray();
+    for (int r = 0; r < GRID_SIZE; r++) {
+        cJSON *rowArr = cJSON_CreateArray();
+        for (int c = GRID_SIZE-1; c >=0; c--) {
+            char cellChar = 'E';
+            switch (b->cells[r][c]) {
+                case CELL_SHIP: cellChar = revealShips ? 'S' : 'E'; break;
+                case CELL_EMPTY: cellChar = 'E'; break;
+                case CELL_HIT:  cellChar = 'H'; break;
+                case CELL_MISS: cellChar = 'M'; break;
+                case CELL_SUNK: cellChar = 'X'; break;
+                default: break;
+            }
+            char cellStr[2] = {cellChar, '\0'};
+            cJSON_AddItemToArray(rowArr, cJSON_CreateString(cellStr));
+        }
+        cJSON_AddItemToArray(boardArr, rowArr);
+    }
+    return boardArr;
+}
+
+void send_ws_game_update(Game *game, bool isInit) {
+    if (!active_ws_handle || active_ws_fd < 0) {
+        ESP_LOGE(TAG_HTTP, "WebSocket not connected");
+        return;
+    }
+
+    cJSON *msg = cJSON_CreateObject();
+    cJSON_AddStringToObject(msg, "type", isInit ? "init" : "update");
+
+    cJSON *player = board_to_json(&game->player.board, true);
+    cJSON *opponent = board_to_json(&game->opponent.board, false);
+
+    cJSON_AddItemToObject(msg, "player", player);
+    cJSON_AddItemToObject(msg, "opponent", opponent);
+    cJSON_AddStringToObject(msg, "turn", game->turn == 0 ? "player" : "opponent");
+
+    char *str = cJSON_PrintUnformatted(msg);
+    httpd_ws_frame_t frame = {
+        .type = HTTPD_WS_TYPE_TEXT,
+        .payload = (uint8_t *)str,
+        .len = strlen(str)
+    };
+    esp_err_t ret = httpd_ws_send_frame_async(active_ws_handle, active_ws_fd, &frame);
+    if(ret != ESP_OK) {
+        ESP_LOGE(TAG_HTTP, "Failed to send WebSocket message: %s", esp_err_to_name(ret));
+    }
+    free(str);
+    ESP_LOGI(TAG_HTTP, "WebSocket update sent");
+    cJSON_Delete(msg);
+}
+
+void send_ws_result(const char *winner) {
+    if (!active_ws_handle || active_ws_fd < 0) return;
+
+    cJSON *msg = cJSON_CreateObject();
+    cJSON_AddStringToObject(msg, "type", "result");
+    cJSON_AddStringToObject(msg, "winner", winner); // "player" or "opponent"
+
+    char *str = cJSON_PrintUnformatted(msg);
+
+    httpd_ws_frame_t frame = {
+        .type = HTTPD_WS_TYPE_TEXT,
+        .payload = (uint8_t *)str,
+        .len = strlen(str)
+    };
+    httpd_ws_send_frame_async(active_ws_handle, active_ws_fd, &frame);
+
+    free(str);
+    cJSON_Delete(msg);
 }
 
 
@@ -228,6 +364,18 @@ static esp_err_t register_endpoints(httpd_handle_t server) {
     };
     httpd_register_uri_handler(server, &uri_ships);
 
+    httpd_uri_t uri_game_setup = {
+        .uri = URI_GAME_SETUP,
+        .method = HTTP_POST,
+        .handler = post_setup_game_handler
+    };
+    httpd_register_uri_handler(server, &uri_game_setup);
+    httpd_uri_t uri_setup_options = {
+        .uri = URI_GAME_SETUP,
+        .method = HTTP_OPTIONS,
+        .handler = cors_options_handler
+    };
+    httpd_register_uri_handler(server, &uri_setup_options);
     httpd_uri_t uri_ws = {
         .uri = URI_WS_GAME_EVENTS,
         .method = HTTP_GET,

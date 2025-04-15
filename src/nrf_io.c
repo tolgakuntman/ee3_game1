@@ -146,6 +146,8 @@ void io_send_task(void *pvParameters) {
                         retry_count++;
                     } else {
                         ESP_LOGE("IO_SEND", "Failed to send message after %d retries", MAX_RETRIES);
+                        uint8_t status_value = (1 << RX_DR) | (1 << TX_DS) | (1 << MAX_RT);
+                        Nrf24_configRegister(&nrf_device, STATUS, status_value);
                     //     uint8_t status = Nrf24_getStatus(&nrf_device);
                     //     /*
                     //         if sending successful (TX_DS) or max retries exceded (MAX_RT).
