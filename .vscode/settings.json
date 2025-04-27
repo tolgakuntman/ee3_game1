@@ -6,6 +6,7 @@
         "esp_log.h": "c",
         "mirf.h": "c",
         "led_matrix_ctrl.h": "c",
-        "esp_http_server.h": "c"
+        "esp_http_server.h": "c",
+        "random": "c"
     }
 }

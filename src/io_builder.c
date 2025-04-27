@@ -19,6 +19,18 @@ bool send_robot_command(uint8_t slave_id, uint8_t ship_id, uint8_t row, uint8_t 
     ESP_LOGI("IO_SEND", "Sending command to slave %d: %s", slave_id, msg.message_type);
     return io_enqueue_send(&msg);
 }
+bool send_sound_command(uint8_t slave_id, uint8_t sound_id) {
+    io_message_t msg;
+    memset(&msg, 0, sizeof(msg));
+
+    strncpy(msg.message_type, "SOUND", MESSAGE_TYPE_SIZE);
+    
+    msg.payload[0] = sound_id;
+    msg.payload_length = 1; // Optional, you could make it 24 always
+    msg.slave_id = slave_id;
+    ESP_LOGI("IO_SEND", "Sending sound command to slave %d: %s", slave_id, msg.message_type);
+    return io_enqueue_send(&msg);
+}
 bool send_led_matrix_update(uint8_t slave_id) {
     io_message_t msg;
     memset(&msg, 0, sizeof(msg));

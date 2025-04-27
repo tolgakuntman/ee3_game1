@@ -17,12 +17,12 @@ static Board ai_guess_board;
 
 void engine_init(void) {
     ai_reset_smart(&smart_ai_state);
-    init_board(&ai_guess_board);
+    init_board(&ai_guess_board,true);
 }
 
 void engine_restart(void) {
     ai_reset_smart(&smart_ai_state);
-    init_board(&ai_guess_board);
+    init_board(&ai_guess_board,true);
 }
 
 void engine_update_smart_ai(int row, int col, char result) {

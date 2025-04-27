@@ -19,8 +19,8 @@ static void Game_Init(Game *game) {
     game->difficulty = DIFFICULTY_HARD;
     current_game=game;
     game->turn= 0;            
-    init_board(&game->player.board);
-    init_board(&game->opponent.board);
+    init_board(&game->player.board, false);
+    init_board(&game->opponent.board, true);
     engine_init();
     game->player.boat_count = MAX_SHIPS;
     game->opponent.boat_count = MAX_SHIPS;
@@ -109,9 +109,10 @@ void game_task(void *pvParameters) {
                     if (xQueueReceive(io_receive_queue, &msg, pdMS_TO_TICKS(100))) {
                         if (strcmp(msg.message_type, "BUTTON") == 0) {
                             Coordinate coord = {
-                                .row = msg.payload[0],
-                                .col = msg.payload[1]
+                                .row = msg.payload[1],
+                                .col = msg.payload[0]
                             };
+                            coord.col = GRID_SIZE - 1 - coord.col; // Invert row for display
                             char result = apply_guess(&game->opponent, coord.row, coord.col);
                             if(!result){
                                 ESP_LOGI(GAME_TAG, "Already guessed at (%d, %d)", coord.row, coord.col);
@@ -119,8 +120,9 @@ void game_task(void *pvParameters) {
                             }
                             if(result == 'H' || result == 'S') {
                                 ESP_LOGI(GAME_TAG, "Hit at (%d, %d)", coord.row, coord.col);
+                                send_sound_command(4, 0);
                             } else if(result == 'M') {
- 
+                                send_sound_command(4, 1);
                                 ESP_LOGI(GAME_TAG,"Miss at (%d, %d)", coord.row, coord.col);
                             }
                             render_board_to_matrix(&game->player.board, PLAYER_MATRIX, true);
@@ -141,7 +143,7 @@ void game_task(void *pvParameters) {
                     break;
                 }
             case GAME_STATE_WAITING_FOR_OPPONENT:
-                vTaskDelay(pdMS_TO_TICKS(1000)); // Wait for opponent's move
+                vTaskDelay(pdMS_TO_TICKS(2000)); // Wait for opponent's move
                 Coordinate coord={0,0};
                 Board *ai_board = engine_get_ai_board();
                 engine_get_guess(game->difficulty, ai_board, &coord.row, &coord.col);
@@ -156,7 +158,7 @@ void game_task(void *pvParameters) {
                 } else if(result == 'M') {
 
                     ESP_LOGI(GAME_TAG,"Miss at (%d, %d)", coord.row, coord.col);
-                }
+                } 
                 render_board_to_matrix(&game->player.board, PLAYER_MATRIX, true);
                 render_board_to_matrix(&game->opponent.board, OPPONENT_MATRIX, false);
                 print_board(&game->opponent.board, true);
@@ -180,15 +182,28 @@ void game_task(void *pvParameters) {
             case GAME_STATE_GAME_OVER:
                 // send_game_over_update(); // to GUI, LEDs, etc.
                 vTaskDelay(pdMS_TO_TICKS(500)); // brief pause
-                // game->state = GAME_STATE_GAME_RESTART;
+                game->state = GAME_STATE_GAME_RESTART;
                 break;
 
             case GAME_STATE_GAME_RESTART:
                 engine_restart();
+                ESP_LOGI(GAME_TAG, "restarting the game");
+                for(int i =0; i < MAX_SHIPS; i++){
+                    ESP_LOGI(GAME_TAG, "Boat %d hit count: %d", i, game->player.boats[i].hit_count);
+                    if(game->player.boats[i].hit_count < game->player.boats[i].length){
+                        if(game->player.boats[i].horizontal){
+                            send_robot_command(4,4 - game->player.boats[i].length,game->player.boats[i].coords[0].row + game->player.boats[i].length - 1
+                                ,game->player.boats[i].coords[0].col,game->player.boats[i].horizontal ? 0:1,0);
+                        }else{  
+                            send_robot_command(4,4 - game->player.boats[i].length,game->player.boats[i].coords[0].row,game->player.boats[i].coords[0].col,game->player.boats[i].horizontal ? 0:1,0);
+                        }
+                        vTaskDelay(pdMS_TO_TICKS(5000));
+                    }
+                }
                 game->state = GAME_STATE_INIT;
                 break;
         }
         send_led_matrix_update(3);
-        vTaskDelay(pdMS_TO_TICKS(100)); // reduce CPU load
+        vTaskDelay(pdMS_TO_TICKS(250)); // reduce CPU load
     }
 }

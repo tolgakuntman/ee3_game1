@@ -62,8 +62,8 @@ void setLEDColor(uint8_t matrixNum, uint8_t row, uint8_t col, Color color) {
             break;
         case COLOR_CYAN:
             matrix[row] &= ~(1 << bit1); // on green
-            matrix[row] &= ~(1 << bit2); // on blue
-            matrix[row] |=  (1 << bit0); // off red
+            matrix[row] &= ~(1 << bit0); // on blue
+            matrix[row] |=  (1 << bit2); // off red
             break;
         default: // COLOR_OFF
             matrix[row] |= (1 << bit0) | (1 << bit1) | (1 << bit2);

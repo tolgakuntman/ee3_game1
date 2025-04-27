@@ -57,8 +57,10 @@ void app_main() {
     while(1){
         
         // send_robot_command(3,1,0,0,0,0);
-        vTaskDelay(10 / portTICK_PERIOD_MS);
-        // send_robot_command(2,1,0,0,0,1);
+        // send_robot_command(4,0,0,0,0,0);
+
+        vTaskDelay(10/ portTICK_PERIOD_MS);
+        // send_robot_command(4,1,0,0,0,1);
         // setLEDColor(1, 0, 0, COLOR_RED);
         // vTaskDelay(50 / portTICK_PERIOD_MS);
         // setLEDColor(2, 0, 0, COLOR_RED);

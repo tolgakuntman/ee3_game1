@@ -13,7 +13,7 @@
 #include <arpa/inet.h>
 #include "game.h"
 #include "game_logic.h"
-
+#include "io_builder.h"
 static const char *TAG_WIFI = "WiFiStation";
 static const char *TAG_HTTP = "HTTP_Server";
 
@@ -53,8 +53,8 @@ void wifi_init_sta(void) {
 
     wifi_config_t wifi_config = {
         .sta = {
-            .ssid = "FiberHGW_ZTGJ5N_2.4GHz",
-            .password = "NJHbuxFTb4",
+            .ssid = "Tolga",
+            .password = "1234567890",
         },
     };
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
@@ -140,9 +140,9 @@ static esp_err_t post_place_ships_handler(httpd_req_t *req) {
     for (int i = 0; i < cJSON_GetArraySize(ships); ++i) {
         cJSON *ship = cJSON_GetArrayItem(ships, i);
         if (!ship) continue;
-        int row = cJSON_GetObjectItem(ship, "row")->valueint;
-        int col = cJSON_GetObjectItem(ship, "col")->valueint;
         int len = cJSON_GetObjectItem(ship, "length")->valueint;
+        int row = cJSON_GetObjectItem(ship, "row")->valueint + (GRID_SIZE-1);
+        int col = cJSON_GetObjectItem(ship, "col")->valueint;
         bool horizontal = cJSON_GetObjectItem(ship, "horizontal")->valueint;
         ESP_LOGI(TAG_HTTP, "Placing ship at (%d, %d) length %d %s", row, col, len, horizontal ? "horizontal" : "vertical");
         if (player->boat_count >= MAX_SHIPS) break;
@@ -151,10 +151,11 @@ static esp_err_t post_place_ships_handler(httpd_req_t *req) {
             cJSON_Delete(json);
             return ESP_FAIL;
         }
-
         Boat *b = &player->boats[player->boat_count];
         place_ship(&player->board, b, row, col, len, horizontal);
+        send_robot_command(4,player->boat_count,row,col+ b->length -1,horizontal ? 0:1,0);
         player->boat_count++;
+        vTaskDelay(10000/portTICK_PERIOD_MS);
     }
 
     ESP_LOGI(TAG_HTTP, "Ships placed via API.");
@@ -180,13 +181,10 @@ static esp_err_t post_setup_game_handler(httpd_req_t *req) {
     cJSON *level = cJSON_GetObjectItem(json, "difficulty");
     cJSON *ships = cJSON_GetObjectItem(json, "ships");
     cJSON *random = cJSON_GetObjectItem(json, "random");
-    if (!level || !cJSON_IsNumber(level) || !ships || !cJSON_IsArray(ships)|| !random || !cJSON_IsBool(random)) {
-        cJSON_Delete(json);
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing fields");
-    }
 
     Game *game = get_game_instance();
-    game->difficulty = (difficulty_level_t)level->valueint;
+    game->difficulty = (difficulty_level_t)atoi(level->valuestring);
+    // ESP_LOGI(TAG_HTTP, "Difficulty set to %d", game->difficulty);
     bool is_random = cJSON_IsTrue(random);
     if(is_random) {
         game->state = GAME_STATE_RANDOM_INIT;
@@ -203,11 +201,13 @@ static esp_err_t post_setup_game_handler(httpd_req_t *req) {
         cJSON *ship = cJSON_GetArrayItem(ships, i);
         if (!ship) continue;
 
-        int row = cJSON_GetObjectItem(ship, "row")->valueint;
+        int row = (GRID_SIZE - 1) - cJSON_GetObjectItem(ship, "row")->valueint;
         int len = cJSON_GetObjectItem(ship, "length")->valueint;
         int col = cJSON_GetObjectItem(ship, "col")->valueint;
         bool horizontal = cJSON_GetObjectItem(ship, "horizontal")->valueint;
-
+        if(!horizontal){
+            row -= (len - 1);
+        }
         ESP_LOGI(TAG_HTTP, "Placing ship at (%d, %d) length %d %s", row, col, len, horizontal ? "horizontal" : "vertical");
 
         if (player->boat_count >= MAX_SHIPS) break;
@@ -216,9 +216,18 @@ static esp_err_t post_setup_game_handler(httpd_req_t *req) {
             cJSON_Delete(json);
             return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid placement");
         }
-
         Boat *b = &player->boats[player->boat_count];
         place_ship(&player->board, b, row, col, len, horizontal);
+        if(horizontal){
+            send_robot_command(4,player->boat_count,row,col+(b->length-1),horizontal ? 0:1,0);
+        }else{
+            send_robot_command(4,player->boat_count,row,col,horizontal ? 0:1,0);
+        }
+        // send_robot_command(4,player->boat_count,row,col+(b->length-1),horizontal ? 0:1,0);
+        vTaskDelay(250/portTICK_PERIOD_MS);
+        render_board_to_matrix(&player->board,2,true);
+        send_led_matrix_update(3);
+        vTaskDelay(5000/portTICK_PERIOD_MS);
         player->boat_count++;
     }
 
@@ -277,9 +286,9 @@ static esp_err_t websocket_handler(httpd_req_t *req) {
 
 static cJSON *board_to_json(const Board *b, bool revealShips) {
     cJSON *boardArr = cJSON_CreateArray();
-    for (int r = 0; r < GRID_SIZE; r++) {
+    for (int r = GRID_SIZE - 1; r >= 0; r--) {
         cJSON *rowArr = cJSON_CreateArray();
-        for (int c = GRID_SIZE-1; c >=0; c--) {
+        for (int c = 0; c <GRID_SIZE; c++) {
             char cellChar = 'E';
             switch (b->cells[r][c]) {
                 case CELL_SHIP: cellChar = revealShips ? 'S' : 'E'; break;

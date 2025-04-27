@@ -48,11 +48,13 @@ typedef struct {
     int length;
     Coordinate coords[5];
     int hit_count;
+    bool horizontal;
 } Boat;
 
 // Board representation
 typedef struct {
     uint8_t cells[GRID_SIZE][GRID_SIZE];
+    bool isOpp;
 } Board;
 
 // Player board + boat state

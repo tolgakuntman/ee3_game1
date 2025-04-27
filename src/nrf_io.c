@@ -45,31 +45,6 @@ static void configure_nrf_irq_pin() {
     nrf_irq_queue = xQueueCreate(10, sizeof(uint32_t));
 }
 
-static void retry_timer_callback(void *arg) {
-    if (retry_count < MAX_RETRIES) {
-        retry_count++;
-
-        if (xSemaphoreTake(nrf_mutex, 10 / portTICK_PERIOD_MS) == pdTRUE) {
-            uint8_t buffer[32];
-            memset(buffer, 0, sizeof(buffer));
-            memcpy(buffer, retry_msg.message_type, MESSAGE_TYPE_SIZE);
-            memcpy(buffer + MESSAGE_TYPE_SIZE, retry_msg.payload, PAYLOAD_SIZE);
-
-            Nrf24_setTADDR(&nrf_device, (uint8_t *)slave_addresses[retry_msg.slave_id - 2]);
-            Nrf24_send(&nrf_device, buffer);
-
-            if (!Nrf24_isSend(&nrf_device, 10)) {
-                esp_timer_start_once(retry_timer, 50000);
-            }
-
-            xSemaphoreGive(nrf_mutex);
-        } else {
-            ESP_LOGW("RETRY", "NRF mutex unavailable — retry postponed");
-        }
-    } else {
-        ESP_LOGE("RETRY", "Failed to send message after %d retries", MAX_RETRIES);
-    }
-}
 
 void io_thread_init(void) {
     io_send_queue = xQueueCreate(IO_QUEUE_SIZE, sizeof(io_message_t));
@@ -95,12 +70,6 @@ void io_thread_init(void) {
     ESP_LOGE(pcTaskGetName(NULL), "all rs added");
     ESP_LOGW(pcTaskGetName(NULL), "Set RF Data Ratio to 1MBps");
 	Nrf24_SetSpeedDataRates(&nrf_device, 0);
-    const esp_timer_create_args_t timer_args = {
-        .callback = &retry_timer_callback,
-        .name = "retry_timer"
-    };
-    esp_timer_create(&timer_args, &retry_timer);
-    ESP_LOGE(pcTaskGetName(NULL), "timer init");
     uint8_t status_value = (1 << RX_DR) | (1 << TX_DS) | (1 << MAX_RT);
     Nrf24_configRegister(&nrf_device, STATUS, status_value);
 
@@ -157,7 +126,7 @@ void io_send_task(void *pvParameters) {
                         break;
                     
                     }
-                    vTaskDelay(1 / portTICK_PERIOD_MS);
+                    vTaskDelay(pdMS_TO_TICKS(10));
                 }
                 xSemaphoreGive(nrf_mutex);
             } else {
@@ -180,8 +149,6 @@ void io_receive_task(void *pvParameters) {
             if (xSemaphoreTake(nrf_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
                 if (Nrf24_dataReady(&nrf_device)) {
                     Nrf24_getData(&nrf_device, raw_data);
-                    xSemaphoreGive(nrf_mutex);
-
                     memcpy(msg.message_type, raw_data, 8);
                     msg.message_type[7] = '\0';
                     memcpy(msg.payload, raw_data + 8, 24);

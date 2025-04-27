@@ -9,7 +9,7 @@
 
 
 // Game setup
-void init_board(Board *b);
+void init_board(Board *b, bool isOpp);
 void print_board(const Board *b, bool reveal);
 void place_ship(Board *b, Boat *boat, int row, int col, int length, bool horizontal);
 bool can_place_ship(const Board *b, int row, int col, int length, bool horizontal);

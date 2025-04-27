@@ -5,11 +5,16 @@
 #include "esp_log.h"
 #include <stdio.h>
 #include <esp_random.h>
+#include "io_builder.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "http_server.h"
 
 static const char *TAG = "game_logic";
 
-void init_board(Board *b) {
+void init_board(Board *b, bool isOpp) {
     memset(b->cells, CELL_EMPTY, sizeof(b->cells));
+    b->isOpp=isOpp;
 }
 
 void print_board(const Board *b, bool reveal) {
@@ -59,6 +64,7 @@ void place_ship(Board *b, Boat *boat, int row, int col, int length, bool horizon
         b->cells[r][c] = CELL_SHIP;
         boat->coords[i].row = r;
         boat->coords[i].col = c;
+        boat->horizontal = horizontal;
     }
     ESP_LOGI(TAG, "Placed ship at (%d, %d) with length %d %s", row, col, length, horizontal ? "horizontally" : "vertically");
 }
@@ -77,6 +83,16 @@ char apply_guess(Player *target, int row, int col) {
                             int r = boat->coords[j].row;
                             int c = boat->coords[j].col;
                             target->board.cells[r][c] = CELL_SUNK;
+                        }
+                        if(!target->board.isOpp){
+                            send_sound_command(4, 0);
+                            vTaskDelay(pdMS_TO_TICKS(100));
+                            if(boat->horizontal){
+                                send_robot_command(4,4 - boat->length,row,col + boat->length - 1,boat->horizontal ? 0:1,0);
+                            }else{
+                                send_robot_command(4,4 - boat->length,row,col,boat->horizontal ? 0:1,0);
+                            }
+                            vTaskDelay(pdMS_TO_TICKS(5000));
                         }
                         ESP_LOGI(TAG, "Ship sunk at (%d, %d)", row, col);
                         return 'S';
@@ -114,6 +130,16 @@ void place_random_ships(Player *p, const int lengths[], int count) {
             bool horizontal = esp_random() % 2;
             if (can_place_ship(&p->board, row, col, lengths[i], horizontal)) {
                 place_ship(&p->board, &p->boats[p->boat_count], row, col, lengths[i], horizontal);
+
+                if(!p->board.isOpp){
+                    if(horizontal){
+                        send_robot_command(4,lengths[i],row,col+(lengths[i]-1),horizontal ? 0:1,0);
+                    }else{
+                        send_robot_command(4,lengths[i],row,col,horizontal ? 0:1,0);
+                    }
+                    send_ws_game_update(get_game_instance(), false);
+                    vTaskDelay(pdMS_TO_TICKS(5000));
+                }
                 p->boat_count++;
                 break;
             }
