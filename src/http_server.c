@@ -224,10 +224,10 @@ static esp_err_t post_setup_game_handler(httpd_req_t *req) {
             send_robot_command(4,player->boat_count,row,col,horizontal ? 0:1,0);
         }
         // send_robot_command(4,player->boat_count,row,col+(b->length-1),horizontal ? 0:1,0);
-        vTaskDelay(250/portTICK_PERIOD_MS);
-        render_board_to_matrix(&player->board,2,true);
-        send_led_matrix_update(3);
-        vTaskDelay(5000/portTICK_PERIOD_MS);
+        // vTaskDelay(500/portTICK_PERIOD_MS);
+        // render_board_to_matrix(&player->board,2,true);
+        // send_led_matrix_update(3);
+        vTaskDelay(10000/portTICK_PERIOD_MS);
         player->boat_count++;
     }
 

@@ -88,11 +88,11 @@ char apply_guess(Player *target, int row, int col) {
                             send_sound_command(4, 0);
                             vTaskDelay(pdMS_TO_TICKS(100));
                             if(boat->horizontal){
-                                send_robot_command(4,4 - boat->length,row,col + boat->length - 1,boat->horizontal ? 0:1,0);
+                                send_robot_command(4,4 - boat->length,boat->coords->row,boat->coords->col + boat->length - 1,boat->horizontal ? 0:1,1);
                             }else{
-                                send_robot_command(4,4 - boat->length,row,col,boat->horizontal ? 0:1,0);
+                                send_robot_command(4,4 - boat->length,boat->coords->row,boat->coords->col,boat->horizontal ? 0:1,1);
                             }
-                            vTaskDelay(pdMS_TO_TICKS(5000));
+                            vTaskDelay(pdMS_TO_TICKS(10000));
                         }
                         ESP_LOGI(TAG, "Ship sunk at (%d, %d)", row, col);
                         return 'S';
@@ -133,12 +133,12 @@ void place_random_ships(Player *p, const int lengths[], int count) {
 
                 if(!p->board.isOpp){
                     if(horizontal){
-                        send_robot_command(4,lengths[i],row,col+(lengths[i]-1),horizontal ? 0:1,0);
+                        send_robot_command(4,4 - lengths[i],row,col+(lengths[i]-1),horizontal ? 0:1,0);
                     }else{
-                        send_robot_command(4,lengths[i],row,col,horizontal ? 0:1,0);
+                        send_robot_command(4,4 - lengths[i],row,col,horizontal ? 0:1,0);
                     }
                     send_ws_game_update(get_game_instance(), false);
-                    vTaskDelay(pdMS_TO_TICKS(5000));
+                    vTaskDelay(pdMS_TO_TICKS(10000));
                 }
                 p->boat_count++;
                 break;

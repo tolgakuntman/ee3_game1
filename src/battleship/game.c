@@ -192,12 +192,12 @@ void game_task(void *pvParameters) {
                     ESP_LOGI(GAME_TAG, "Boat %d hit count: %d", i, game->player.boats[i].hit_count);
                     if(game->player.boats[i].hit_count < game->player.boats[i].length){
                         if(game->player.boats[i].horizontal){
-                            send_robot_command(4,4 - game->player.boats[i].length,game->player.boats[i].coords[0].row + game->player.boats[i].length - 1
-                                ,game->player.boats[i].coords[0].col,game->player.boats[i].horizontal ? 0:1,0);
+                            send_robot_command(4,4 - game->player.boats[i].length,game->player.boats[i].coords[0].row 
+                                ,game->player.boats[i].coords[0].col + game->player.boats[i].length - 1,game->player.boats[i].horizontal ? 0:1,1);
                         }else{  
-                            send_robot_command(4,4 - game->player.boats[i].length,game->player.boats[i].coords[0].row,game->player.boats[i].coords[0].col,game->player.boats[i].horizontal ? 0:1,0);
+                            send_robot_command(4,4 - game->player.boats[i].length,game->player.boats[i].coords[0].row,game->player.boats[i].coords[0].col,game->player.boats[i].horizontal ? 0:1,1);
                         }
-                        vTaskDelay(pdMS_TO_TICKS(5000));
+                        vTaskDelay(pdMS_TO_TICKS(12500));
                     }
                 }
                 game->state = GAME_STATE_INIT;
